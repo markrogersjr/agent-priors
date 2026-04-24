@@ -1,0 +1,13 @@
+{
+  "name": "review",
+  "version": "0.1.1",
+  "description": "Preview diffs in neovim before accepting",
+  "userConfig": {
+    "tmux_prefix": {
+      "type": "string",
+      "title": "Tmux Prefix",
+      "description": "Tmux session name prefix to match (default: dev-)",
+      "sensitive": false
+    }
+  }
+}

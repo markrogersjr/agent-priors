@@ -1,0 +1,13 @@
+{
+  "name": "reinforce",
+  "version": "0.1.2",
+  "description": "Repeat instructions on every prompt",
+  "userConfig": {
+    "path": {
+      "type": "file",
+      "title": "File Path",
+      "description": "Path to the file to inject on every prompt",
+      "sensitive": false
+    }
+  }
+}

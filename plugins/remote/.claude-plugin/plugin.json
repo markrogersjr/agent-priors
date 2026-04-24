@@ -1,0 +1,25 @@
+{
+  "name": "remote",
+  "version": "0.1.4",
+  "description": "Commit, push, sync, and run commands on a remote server",
+  "userConfig": {
+    "alias": {
+      "type": "string",
+      "title": "SSH Alias",
+      "description": "SSH alias for the remote server",
+      "sensitive": false
+    },
+    "author": {
+      "type": "string",
+      "title": "Git Author",
+      "description": "Git commit author (e.g., Name <email>)",
+      "sensitive": false
+    },
+    "directory": {
+      "type": "directory",
+      "title": "Remote Directory",
+      "description": "Remote working directory",
+      "sensitive": false
+    }
+  }
+}

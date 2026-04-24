@@ -1,0 +1,24 @@
+{
+  "hooks": {
+    "PreCompact": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "agent-priors-persist-on-precompact"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "agent-priors-persist-on-prompt"
+          }
+        ]
+      }
+    ]
+  }
+}

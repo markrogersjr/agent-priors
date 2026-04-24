@@ -1,0 +1,12 @@
+{
+  "name": "persist",
+  "version": "0.1.0",
+  "description": "Persist conversation context across compaction events",
+  "hooks": "./hooks/hooks.json",
+  "userConfig": {
+    "model": {
+      "description": "Claude model for compaction summarization (e.g., sonnet, haiku, opus)",
+      "sensitive": false
+    }
+  }
+}

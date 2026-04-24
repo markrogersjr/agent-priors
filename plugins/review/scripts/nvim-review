@@ -1,0 +1,363 @@
+#!/usr/bin/env python3
+"""Display rich diffs in neovim when Claude proposes file edits."""
+import difflib
+import json
+import os
+import shutil
+import subprocess
+import sys
+
+STATE_DIR = '/tmp/claude-diff-state'
+
+SHOW_LUA = """\
+do
+  for _, b in ipairs(vim.api.nvim_list_bufs()) do
+    if vim.b[b].claude_diff then
+      pcall(vim.cmd, 'bwipeout! ' .. b)
+    end
+  end
+  local content_path = [[__CONTENT_PATH__]]
+  local claude_pane = [[__CLAUDE_PANE__]]
+  local file_path = [[__FILE_PATH__]]
+  local first_line = __FIRST_LINE__
+  local orig_mtime = vim.fn.getftime(file_path)
+  local buf, prev_buf
+  local prompt_was_visible = false
+  local closed = false
+  local ticks = 0
+  local function show()
+    for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
+      local b = vim.api.nvim_win_get_buf(win)
+      if vim.bo[b].buftype == '' then
+        vim.api.nvim_set_current_win(win)
+        break
+      end
+    end
+    prev_buf = vim.api.nvim_get_current_buf()
+    buf = vim.api.nvim_create_buf(false, true)
+    vim.b[buf].claude_diff = true
+    vim.api.nvim_buf_set_lines(buf, 0, -1, false, vim.fn.readfile(content_path))
+    vim.api.nvim_win_set_buf(0, buf)
+    vim.bo[buf].bufhidden = 'wipe'
+    vim.bo[buf].modifiable = false
+    local ft = vim.filetype.match({ filename = '__FILENAME__' })
+    if ft then vim.bo[buf].filetype = ft end
+    vim.cmd('normal! __FIRST_MARKER__Gzt')
+    vim.o.guicursor = 'a:ver1-Cursor/lCursor'
+    vim.api.nvim_set_hl(0, 'Cursor', { bg = '#000000', fg = '#000000', blend = 100 })
+    vim.api.nvim_set_hl(0, 'lCursor', { bg = '#000000', fg = '#000000', blend = 100 })
+    local ns = vim.api.nvim_create_namespace('claude_diff')
+    vim.api.nvim_set_hl(0, 'ClaudeDiffLineRemoved', { bg = '#3A0400' })
+    vim.api.nvim_set_hl(0, 'ClaudeDiffLineAdded', { bg = '#072800' })
+    vim.api.nvim_set_hl(0, 'ClaudeDiffCharRemoved', { bg = '#580800' })
+    vim.api.nvim_set_hl(0, 'ClaudeDiffCharAdded', { bg = '#104600' })
+    vim.api.nvim_set_hl(0, 'ClaudeDiffSignRemoved', { fg = '#B43C2A' })
+    vim.api.nvim_set_hl(0, 'ClaudeDiffSignAdded', { fg = '#9ECE6A' })
+    vim.api.nvim_set_hl(0, 'ClaudeDiffMarker', { fg = '#888888' })
+    local highlights = __HIGHLIGHTS__
+    for _, h in ipairs(highlights) do
+      if h.type == 'marker' then
+        local line_len = #(vim.api.nvim_buf_get_lines(buf, h.line, h.line + 1, false)[1] or '')
+        vim.api.nvim_buf_set_extmark(buf, ns, h.line, 0, {
+          end_col = line_len,
+          hl_group = 'ClaudeDiffMarker',
+          hl_eol = true,
+          priority = 199,
+        })
+      elseif h.type == 'removed' then
+        vim.api.nvim_buf_set_extmark(buf, ns, h.line, 0, {
+          sign_text = '-',
+          sign_hl_group = 'ClaudeDiffSignRemoved',
+          line_hl_group = 'ClaudeDiffLineRemoved',
+          priority = 199,
+        })
+        for _, c in ipairs(h.chars or {}) do
+          vim.api.nvim_buf_set_extmark(buf, ns, h.line, c[1], {
+            end_col = c[2],
+            hl_group = 'ClaudeDiffCharRemoved',
+            priority = 201,
+          })
+        end
+      elseif h.type == 'added' then
+        vim.api.nvim_buf_set_extmark(buf, ns, h.line, 0, {
+          sign_text = '+',
+          sign_hl_group = 'ClaudeDiffSignAdded',
+          line_hl_group = 'ClaudeDiffLineAdded',
+          priority = 199,
+        })
+        for _, c in ipairs(h.chars or {}) do
+          vim.api.nvim_buf_set_extmark(buf, ns, h.line, c[1], {
+            end_col = c[2],
+            hl_group = 'ClaudeDiffCharAdded',
+            priority = 201,
+          })
+        end
+      end
+    end
+  end
+  local timer = vim.uv.new_timer()
+  timer:start(100, 100, vim.schedule_wrap(function()
+    if closed then return end
+    ticks = ticks + 1
+    local close = false
+    if vim.fn.filereadable(content_path) == 0 then
+      close = true
+    else
+      local output = vim.fn.system('tmux capture-pane -p -S -5 -t ' .. claude_pane)
+      local has_prompt = output:match('Esc to cancel')
+      if has_prompt then
+        prompt_was_visible = true
+        if not buf then show() end
+      elseif prompt_was_visible then
+        close = true
+      elseif ticks >= 3 then
+        closed = true
+        timer:stop()
+        timer:close()
+        return
+      end
+    end
+    if close then
+      closed = true
+      timer:stop()
+      timer:close()
+      if not buf then return end
+      local accepted = vim.fn.getftime(file_path) ~= orig_mtime
+      for _, win in ipairs(vim.api.nvim_list_wins()) do
+        if vim.api.nvim_win_get_buf(win) == buf then
+          if accepted then
+            vim.api.nvim_set_current_win(win)
+            vim.cmd('edit ' .. vim.fn.fnameescape(file_path))
+            vim.cmd('normal! ' .. math.max(1, first_line - 7) .. 'Gzt')
+          elseif vim.api.nvim_buf_is_valid(prev_buf) then
+            vim.api.nvim_win_set_buf(win, prev_buf)
+          end
+          break
+        end
+      end
+      if vim.api.nvim_buf_is_valid(buf) then
+        pcall(vim.cmd, 'bwipeout! ' .. buf)
+      end
+      vim.cmd('checktime')
+      vim.o.guicursor = 'n-v-c-sm:block,i-ci-ve:ver25,r-cr-o:hor20'
+      vim.api.nvim_set_hl(0, 'Cursor', {})
+      vim.api.nvim_set_hl(0, 'lCursor', {})
+    end
+  end))
+end"""
+
+
+def find_own_pane() -> tuple[str, str] | None:
+    """Return (pane_id, session_name) for the tmux pane this process runs in."""
+    result = subprocess.run(
+        ['tmux', 'list-panes', '-a', '-F', '#{pane_pid} #{pane_id} #{session_name}'],
+        capture_output=True, text=True
+    )
+    pane_by_pid = {}
+    for line in result.stdout.strip().split('\n'):
+        parts = line.split(None, 2)
+        if len(parts) == 3:
+            pane_by_pid[parts[0]] = (parts[1], parts[2])
+    pid = str(os.getpid())
+    while pid and pid != '1':
+        if pid in pane_by_pid:
+            return pane_by_pid[pid]
+        result = subprocess.run(
+            ['ps', '-o', 'ppid=', '-p', pid],
+            capture_output=True, text=True
+        )
+        pid = result.stdout.strip()
+    return None
+
+
+def find_nvim_pane(session: str) -> str | None:
+    result = subprocess.run(
+        ['tmux', 'list-panes', '-t', session, '-F', '#{pane_id} #{pane_current_command}'],
+        capture_output=True, text=True
+    )
+    for line in result.stdout.strip().split('\n'):
+        pane_id, *command = line.split()
+        if command and 'nvim' in command[0].lower():
+            return pane_id
+    return None
+
+
+def find_nvim_socket(pane: str) -> str | None:
+    result = subprocess.run(
+        ['tmux', 'display-message', '-t', pane, '-p', '#{pane_pid}'],
+        capture_output=True, text=True
+    )
+    shell_pid = result.stdout.strip()
+    if not shell_pid:
+        return None
+    result = subprocess.run(
+        ['pgrep', '-P', shell_pid, '-x', 'nvim'],
+        capture_output=True, text=True
+    )
+    nvim_pid = result.stdout.strip().split('\n')[0]
+    if not nvim_pid:
+        return None
+    # nvim forks; the server socket belongs to the child
+    result = subprocess.run(
+        ['pgrep', '-P', nvim_pid, '-x', 'nvim'],
+        capture_output=True, text=True
+    )
+    child_pid = result.stdout.strip().split('\n')[0]
+    if child_pid:
+        nvim_pid = child_pid
+    result = subprocess.run(
+        ['lsof', '-U', '-a', '-p', nvim_pid, '-Fn'],
+        capture_output=True, text=True
+    )
+    for line in result.stdout.split('\n'):
+        if line.startswith('n/') and 'nvim' in line:
+            return line[1:]
+    return None
+
+
+def nvim_luafile(socket: str, path: str):
+    subprocess.run(
+        ['nvim', '--server', socket, '--remote-send', f'<Cmd>luafile {path}<CR>'],
+        capture_output=True, text=True
+    )
+
+
+def work_dir(input_data: dict) -> str:
+    return (
+        f'{STATE_DIR}'
+        f'/{input_data.get("session_id", "default")}'
+        f'/{input_data.get("tool_use_id", "unknown")}'
+    )
+
+
+def word_diff(old_line: str, new_line: str) -> tuple[list, list]:
+    """Return (old_ranges, new_ranges) of character spans that differ between two lines."""
+    opcodes = difflib.SequenceMatcher(None, old_line, new_line).get_opcodes()
+    return (
+        [(i1, i2) for tag, i1, i2, _, _ in opcodes if tag in ('replace', 'delete')],
+        [(j1, j2) for tag, _, _, j1, j2 in opcodes if tag in ('replace', 'insert')],
+    )
+
+
+def build_conflict_file(
+    original_lines: list[str], proposed_lines: list[str]
+) -> tuple[list[str], int | None, list[dict]]:
+    """Build full file with conflict markers around each change."""
+    content: list[str] = []
+    highlights: list[dict] = []
+    first_marker: int | None = None
+    for tag, i1, i2, j1, j2 in difflib.SequenceMatcher(None, original_lines, proposed_lines).get_opcodes():
+        if tag == 'equal':
+            content.extend(line.rstrip('\n') for line in original_lines[i1:i2])
+            continue
+        if first_marker is None:
+            first_marker = len(content)
+        old = [line.rstrip('\n') for line in original_lines[i1:i2]]
+        new = [line.rstrip('\n') for line in proposed_lines[j1:j2]]
+        for index, old_line in enumerate(old):
+            chars = word_diff(old_line, new[index])[0] if index < len(new) else []
+            highlights.append({'type': 'removed', 'line': len(content), 'chars': chars})
+            content.append(old_line)
+        for index, new_line in enumerate(new):
+            chars = word_diff(old[index], new_line)[1] if index < len(old) else []
+            highlights.append({'type': 'added', 'line': len(content), 'chars': chars})
+            content.append(new_line)
+    return content, first_marker, highlights
+
+
+def highlights_to_lua(highlights: list[dict]) -> str:
+    """Serialize highlight metadata as a Lua table literal."""
+    entries = []
+    for highlight in highlights:
+        match highlight['type']:
+            case 'marker':
+                entries.append(f"  {{type = 'marker', line = {highlight['line']}}}")
+            case 'removed' | 'added':
+                parts = [f"type = '{highlight['type']}'", f"line = {highlight['line']}"]
+                if highlight.get('chars'):
+                    chars = ', '.join(
+                        f'{{{start_col}, {end_col}}}'
+                        for start_col, end_col in highlight['chars']
+                    )
+                    parts.append(f'chars = {{{chars}}}')
+                entries.append('  {' + ', '.join(parts) + '}')
+    return '{\n' + ',\n'.join(entries) + ',\n}'
+
+
+def show_diff(input_data: dict, claude_pane: str, socket: str):
+    file_path = input_data['tool_input']['file_path']
+    session_dir = f'{STATE_DIR}/{input_data.get("session_id", "default")}'
+    # clean up stale work dirs from prior rejections
+    if os.path.isdir(session_dir):
+        shutil.rmtree(session_dir)
+    directory = work_dir(input_data)
+    os.makedirs(directory, exist_ok=True)
+    match input_data['tool_name']:
+        case 'Edit':
+            with open(file_path) as f:
+                original = f.read()
+            proposed = (
+                original.replace(
+                    input_data['tool_input']['old_string'],
+                    input_data['tool_input']['new_string']
+                )
+                if input_data['tool_input'].get('replace_all', False)
+                else original.replace(
+                    input_data['tool_input']['old_string'],
+                    input_data['tool_input']['new_string'],
+                    1
+                )
+            )
+            original_lines = original.splitlines(keepends=True)
+        case 'Write':
+            proposed = input_data['tool_input']['content']
+            original_lines = []
+            if os.path.exists(file_path):
+                with open(file_path) as f:
+                    original_lines = f.read().splitlines(keepends=True)
+    proposed_lines = proposed.splitlines(keepends=True)
+    content, first_marker, highlight_data = build_conflict_file(original_lines, proposed_lines)
+    if first_marker is None:
+        shutil.rmtree(directory)
+        return
+    content_path = f'{directory}/content'
+    with open(content_path, 'w') as f:
+        f.write('\n'.join(content))
+    target_line = max(1, first_marker + 1 - 5)
+    lua_path = f'{directory}/show.lua'
+    with open(lua_path, 'w') as f:
+        f.write(
+            SHOW_LUA
+            .replace('__CONTENT_PATH__', content_path)
+            .replace('__FILENAME__', os.path.basename(file_path))
+            .replace('__FIRST_MARKER__', str(target_line))
+            .replace('__HIGHLIGHTS__', highlights_to_lua(highlight_data))
+            .replace('__FILE_PATH__', file_path)
+            .replace('__FIRST_LINE__', str(first_marker + 1))
+            .replace('__CLAUDE_PANE__', claude_pane)
+        )
+    nvim_luafile(socket, lua_path)
+
+
+def main():
+    input_data = json.load(sys.stdin)
+    os.makedirs(STATE_DIR, exist_ok=True)
+    own = find_own_pane()
+    tmux_prefix = os.environ.get('CLAUDE_PLUGIN_OPTION_tmux_prefix', 'dev-')
+    if not own or not own[1].startswith(tmux_prefix):
+        return
+    claude_pane, session = own
+    nvim_pane = find_nvim_pane(session)
+    if not nvim_pane:
+        return
+    socket = find_nvim_socket(nvim_pane)
+    if not socket:
+        return
+    tool_name = input_data.get('tool_name')
+    file_path = input_data.get('tool_input', {}).get('file_path', '')
+    if tool_name in ('Edit', 'Write') and '/.claude/plans/' not in file_path:
+        show_diff(input_data, claude_pane, socket)
+
+
+if __name__ == '__main__':
+    main()

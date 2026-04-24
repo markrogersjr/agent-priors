@@ -1,0 +1,46 @@
+{
+  "name": "agent-priors",
+  "owner": {
+    "name": "Mark Rogers"
+  },
+  "metadata": {
+    "description": "Plugins that shape agent behavior"
+  },
+  "plugins": [
+    {
+      "name": "analyze",
+      "source": "./plugins/analyze",
+      "description": "Deeply analyze data to meet an objective, with adversarial verification"
+    },
+    {
+      "name": "tighten",
+      "source": "./plugins/tighten",
+      "description": "Simplify code with declarative style and locality of reference"
+    },
+    {
+      "name": "reinforce",
+      "source": "./plugins/reinforce",
+      "description": "Repeat CLAUDE.md instructions on every prompt"
+    },
+    {
+      "name": "remote",
+      "source": "./plugins/remote",
+      "description": "Commit, push, sync, and run commands on a remote server"
+    },
+    {
+      "name": "markdown",
+      "source": "./plugins/markdown",
+      "description": "Render markdown files in the browser"
+    },
+    {
+      "name": "review",
+      "source": "./plugins/review",
+      "description": "Preview diffs in neovim before accepting"
+    },
+    {
+      "name": "persist",
+      "source": "./plugins/persist",
+      "description": "Persist conversation context across compaction events"
+    }
+  ]
+}

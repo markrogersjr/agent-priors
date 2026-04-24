@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.backends._legacy:_Backend"
+
+[project]
+name = "agent-priors"
+version = "0.1.0"
+description = "Plugins that shape agent behavior"
+requires-python = ">=3.10"
+dependencies = []
+
+[project.scripts]
+agent-priors-persist-on-precompact = "agent_priors.hook_precompact:main"
+agent-priors-persist-summarize = "agent_priors.hook_precompact:summarize"
+agent-priors-persist-on-prompt = "agent_priors.hook_persist_submit:main"
+
+[tool.setuptools.packages.find]
+where = ["python"]

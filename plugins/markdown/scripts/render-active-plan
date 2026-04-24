@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+PLAN=$(ls -t "$HOME"/.claude/plans/*.md 2>/dev/null | head -1 || true)
+[ -n "$PLAN" ] || exit 0
+
+printf '{"tool_input":{"file_path":"%s"}}' "$PLAN" \
+    | "${CLAUDE_PLUGIN_ROOT}/scripts/markdown-preview"

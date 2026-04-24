@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+set -euo pipefail
+source ~/.env 2>/dev/null || true
+
+SETTINGS=~/.claude/settings.json
+REMOTE_ALIAS=$(jq -er '.pluginConfigs["remote@agent-priors"].options.alias' "$SETTINGS")
+REMOTE_AUTHOR=$(jq -er '.pluginConfigs["remote@agent-priors"].options.author' "$SETTINGS")
+REMOTE_DIR=$(jq -er '.pluginConfigs["remote@agent-priors"].options.directory' "$SETTINGS")
+
+while [[ $# -gt 0 && "$1" == --* ]]; do
+    case "$1" in
+        --alias=*) REMOTE_ALIAS="${1#*=}" ;;
+        --author=*) REMOTE_AUTHOR="${1#*=}" ;;
+        --directory=*) REMOTE_DIR="${1#*=}" ;;
+        *) echo "unknown option: $1" >&2; exit 1 ;;
+    esac
+    shift
+done
+
+BRANCH=$(git rev-parse --abbrev-ref HEAD)
+
+# sync local changes to remote
+if ! git diff --quiet HEAD 2>/dev/null || [ -n "$(git ls-files --others --exclude-standard)" ]; then
+    git add -A
+    MESSAGE=$(git diff --cached | claude -p --bare --model haiku --no-session-persistence --dangerously-skip-permissions "Write a concise git commit message (1 subject line + blank line + bullet points) summarizing this diff. No markdown fences." 2>/dev/null) || MESSAGE="wip: $(date +%Y%m%d-%H%M%S)"
+    git commit --author="$REMOTE_AUTHOR" -m "$MESSAGE" --no-verify --quiet
+fi
+git push --force-with-lease origin "$BRANCH" --quiet 2>/dev/null || git push --set-upstream origin "$BRANCH" --quiet
+
+# update remote checkout
+ssh "$REMOTE_ALIAS" "cd $REMOTE_DIR && git fetch origin --quiet && git checkout $BRANCH --quiet && git reset --hard origin/$BRANCH --quiet"
+
+# execute command if provided
+if [ $# -gt 0 ]; then
+    if [ "$1" = "-t" ]; then
+        # long-running: detached tmux session with log file
+        shift
+        COMMAND="$*"
+        SESSION="remote-$$"
+        LOGFILE="$REMOTE_DIR/logs/$SESSION.log"
+        ssh "$REMOTE_ALIAS" "mkdir -p $REMOTE_DIR/logs && tmux new-session -d -s $SESSION && tmux set-option -t $SESSION remain-on-exit on && tmux pipe-pane -t $SESSION 'cat >> $LOGFILE' && tmux send-keys -t $SESSION 'cd $REMOTE_DIR && $COMMAND' Enter"
+        echo "Running in tmux session '$SESSION' on $REMOTE_ALIAS"
+        echo "Log:    ssh $REMOTE_ALIAS \"tail -100 $LOGFILE\""
+        echo "Attach: ssh -t $REMOTE_ALIAS \"tmux attach -t $SESSION\""
+    else
+        # ad-hoc: stream output directly
+        ssh "$REMOTE_ALIAS" "zsh -i -c 'cd $REMOTE_DIR && $*'"
+    fi
+fi
