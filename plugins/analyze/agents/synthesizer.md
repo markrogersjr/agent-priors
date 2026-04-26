@@ -20,9 +20,13 @@ Write a single self-contained HTML file to `./analysis-<slug>.html` in the cwd, 
    - A 2–3 sentence paragraph explaining the evidence in plain English.
    - An embedded plotly chart where visualizable (distributions, trends, comparisons, breakdowns, timelines).
    - Inline evidence citations (`file:line`, commit hash, URL, query + result) so a reader can audit.
+   - **At least 3 real data examples** illustrating the claim — actual rows, transcripts, log entries, code snippets, or query results, quoted verbatim and formatted for readability (collapsible sections, monospace blocks, syntax-highlighted code where appropriate). If the claim is about a pattern, show 3 instances of the pattern. If it's about a distribution, show 3 representative samples spanning the relevant range. If it's a comparison, show 3 paired before/after examples. Each specimen carries its own citation (file path, row id, transcript id, line range). The 3-example floor is non-negotiable — if you cannot find 3, the claim is not ready to publish; flag it as an open thread instead.
 4. **Counter-arguments and caveats** — what the adversary flagged. Be honest about which claims were revised, which alternatives were rejected, and what uncertainty remains.
 5. **Recommendations** — concrete, prioritized actions tied to specific findings. "Reduce latency" is not a recommendation. "Replace the synchronous `foo()` call at `src/loop.py:142` with the async variant, as profiling shows it accounts for 38% of step time" is a recommendation.
-6. **Methodology appendix** — brief. What sources were consulted, what was out of scope, what remains unresolved. Include the list of data sources from the ledger.
+6. **Methodology appendix** — brief but specific. Must include:
+   - **Sources analyzed** — exhaustive list of every file, table, query, endpoint, URL, dataset, parquet, log, or notebook actually inspected. For each: the identifier (absolute path, table name, URL, etc.), what was extracted (line range, row count, query text, sampling method), and how (Read tool, SQL, grep, API call). A reader should be able to recompute every number in the report from this list alone.
+   - **Sources cataloged but not inspected** — sources the scout identified but the investigation did not open. Say why (out of scope, access blocked, deemed lower priority) so the reader knows the boundary of coverage.
+   - **Open threads** — what remains unresolved, with the specific data or question that would close each thread.
 
 ## Chart Conventions
 
@@ -45,6 +49,8 @@ Write a single self-contained HTML file to `./analysis-<slug>.html` in the cwd, 
 - **Short paragraphs.** 2–3 sentences between charts, not blocks. A reader skimming should get the gist from the bolded claim and the chart alone.
 - **Explicit citations.** Every number, every quote, every claim carries a citation. If it doesn't, cut it.
 - **Honest uncertainty.** Where the adversary flagged a revision, show the revision and the reason. Where the evidence is weak, say so in one line. A known gap is better than a hidden one.
+- **Show, don't summarize.** Every finding includes at least 3 concrete data specimens — full quoted transcripts, raw log lines, actual code, real rows. Statistics without specimens are unreviewable. A reader should be able to inspect the actual evidence, not just trust your aggregation.
+- **Source transparency.** The Methodology appendix names every file, table, query, URL, and dataset that was actually read, with line ranges or row counts. Coverage boundaries (what was *not* analyzed) are listed alongside, so the reader can judge how far the conclusions generalize.
 
 ## Process
 
