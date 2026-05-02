@@ -1,56 +1,70 @@
 ---
 name: remote
-description: Run commands on a remote server via SSH with automatic code sync
+description: This skill should be used whenever a command should run on the configured
+  remote server rather than locally — e.g. "run on the remote", "kick off training on
+  dgx", "tail the log on the box", "ssh in and ...", or any GPU/long-running job that
+  belongs on the remote. Provides the exact Bash invocation needed to sync code and
+  execute the command, with output visible in the transcript.
+allowed-tools: ["Bash(${CLAUDE_PLUGIN_ROOT}/scripts/remote:*)"]
 ---
 
 # Remote
 
-Run commands on a remote server. The `remote` script auto-commits local changes, force-pushes to the current branch, and syncs the remote checkout before executing.
+Sync the local repo to the configured remote server and execute a command there. The
+`remote` script auto-commits any uncommitted changes, force-pushes the current branch,
+syncs the remote checkout, and then runs the command over SSH.
 
-## Usage
+## How to invoke
 
-```bash
-# sync code and stream command output
-/remote <command>
+Issue a single **Bash** tool call:
 
-# sync code and run in detached tmux session (returns immediately)
-/remote -t <command>
+    ${CLAUDE_PLUGIN_ROOT}/scripts/remote <command>
 
-# just sync code, no command
-/remote
+Do NOT:
 
-# override any configured option for a single invocation
-/remote --alias=lightning <command>
-/remote --directory=/other/path <command>
-/remote --alias=lightning --author="Name <email>" -t <command>
-```
+- Pass the command as the Skill tool's `args` parameter. The `args` are silently
+  discarded — nothing runs, and the user sees only "Skill(remote:remote)" with no
+  visible command. Always route through the Bash tool so the full argv renders in the
+  transcript.
+- Invoke the slash command form `/remote <command>`. Slash commands are user-typed;
+  routing through them obscures the argv from the user.
 
-Flags (`--alias=...`, `--author=...`, `--directory=...`) must come before the command and before `-t`. Any unspecified flag falls back to the value in `~/.claude/settings.json`.
+The Bash tool path is the only one that produces a visible, auditable command in the
+user's transcript.
+
+## Modes
+
+Foreground (default) — output streams back. Use for short jobs and inspections.
+
+    ${CLAUDE_PLUGIN_ROOT}/scripts/remote nvidia-smi
+
+Detached (`-t`) — runs in a `tmux` session on the remote, logs to
+`<remote_dir>/logs/remote-<pid>.log`, returns immediately. Use for training runs and
+anything longer than a couple minutes.
+
+    ${CLAUDE_PLUGIN_ROOT}/scripts/remote -t uv run train.py
+
+Sync only — pass no command to push code without executing anything.
+
+    ${CLAUDE_PLUGIN_ROOT}/scripts/remote
+
+## Per-call overrides
+
+Flags must come before the command (and before `-t`). Any unspecified flag falls back
+to the value in `~/.claude/settings.json`.
+
+    ${CLAUDE_PLUGIN_ROOT}/scripts/remote --alias=lightning <command>
+    ${CLAUDE_PLUGIN_ROOT}/scripts/remote --directory=/other/path <command>
+    ${CLAUDE_PLUGIN_ROOT}/scripts/remote --alias=lightning --author="Name <email>" -t <command>
 
 ## Configuration
 
-Configure via the `/plugin` slash command in Claude Code, or edit `~/.claude/settings.json` directly:
+Configured via the `/plugin` slash command, or by editing `~/.claude/settings.json`
+under `pluginConfigs["remote@agent-priors"].options`: `alias`, `author`, `directory`.
+The script reads these at runtime.
 
-```json
-{
-  "pluginConfigs": {
-    "remote@agent-priors": {
-      "options": {
-        "alias": "<ssh host alias>",
-        "author": "<git author, e.g. Name <email>>",
-        "directory": "<remote working directory>"
-      }
-    }
-  }
-}
-```
+## Checking detached job status
 
-The script reads these fields from `settings.json` at runtime.
+`-t` mode pipes all output to a per-session log file. Tail it via:
 
-## Checking Job Status
-
-The `-t` mode pipes all output to `logs/remote-<pid>.log` on the remote via `tmux pipe-pane`. To check:
-
-```bash
-ssh <REMOTE_ALIAS> "tail -200 <REMOTE_DIR>/logs/<session>.log"
-```
+    ssh <REMOTE_ALIAS> "tail -200 <REMOTE_DIR>/logs/remote-<pid>.log"
