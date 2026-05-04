@@ -30,20 +30,26 @@ git push --force-with-lease origin "$BRANCH" --quiet 2>/dev/null || git push --s
 # update remote checkout
 ssh -o ConnectTimeout=10 "$REMOTE_ALIAS" "cd $REMOTE_DIR && git fetch origin --quiet && git checkout $BRANCH --quiet && git reset --hard origin/$BRANCH --quiet"
 
+# wrap a string in single quotes, escaping any embedded single quotes via '\''
+# so the result survives one layer of shell parsing as a single argument
+squote() {
+    printf "'%s'" "$(printf '%s' "$1" | sed "s/'/'\\\\''/g")"
+}
+
 # execute command if provided
 if [ $# -gt 0 ]; then
     if [ "$1" = "-t" ]; then
         # long-running: detached tmux session with log file
         shift
-        COMMAND="$*"
+        WRAPPED=$(squote "cd $REMOTE_DIR && $*")
         SESSION="remote-$$"
         LOGFILE="$REMOTE_DIR/logs/$SESSION.log"
-        ssh -o ConnectTimeout=10 "$REMOTE_ALIAS" "mkdir -p $REMOTE_DIR/logs && tmux new-session -d -s $SESSION && tmux set-option -t $SESSION remain-on-exit on && tmux pipe-pane -t $SESSION 'cat >> $LOGFILE' && tmux send-keys -t $SESSION $(printf '%q' "cd $REMOTE_DIR && $COMMAND") Enter"
+        ssh -o ConnectTimeout=10 "$REMOTE_ALIAS" "mkdir -p $REMOTE_DIR/logs && tmux new-session -d -s $SESSION && tmux set-option -t $SESSION remain-on-exit on && tmux pipe-pane -t $SESSION 'cat >> $LOGFILE' && tmux send-keys -t $SESSION $WRAPPED Enter"
         echo "Running in tmux session '$SESSION' on $REMOTE_ALIAS"
         echo "Log:    ssh $REMOTE_ALIAS \"tail -100 $LOGFILE\""
         echo "Attach: ssh -t $REMOTE_ALIAS \"tmux attach -t $SESSION\""
     else
         # ad-hoc: stream output directly
-        ssh -o ConnectTimeout=10 "$REMOTE_ALIAS" "zsh -i -c $(printf '%q' "cd $REMOTE_DIR && $*")"
+        ssh -o ConnectTimeout=10 "$REMOTE_ALIAS" "zsh -i -c $(squote "cd $REMOTE_DIR && $*")"
     fi
 fi
