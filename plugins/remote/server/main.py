@@ -36,12 +36,6 @@ def remote_run(
     """
     Run a command on the configured remote server after syncing the local repository.
 
-    IMPORTANT — before invoking this tool, write a single plain-text line to the user
-    in the form `Remote(command="<command>", detached=<bool>, ...)` listing every
-    non-default argument you are about to pass. Claude Code's UI collapses MCP calls
-    to `⏺ Calling plugin:remote:remote…`, so the user cannot see the args without
-    expanding; the announcement makes the call visible inline.
-
     The bash script auto-commits any uncommitted local changes, force-pushes the current
     branch, syncs the remote checkout, then executes the command over SSH. Output is
     captured and returned in full for foreground runs; detached runs return immediately
