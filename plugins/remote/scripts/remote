@@ -38,12 +38,12 @@ if [ $# -gt 0 ]; then
         COMMAND="$*"
         SESSION="remote-$$"
         LOGFILE="$REMOTE_DIR/logs/$SESSION.log"
-        ssh -o ConnectTimeout=10 "$REMOTE_ALIAS" "mkdir -p $REMOTE_DIR/logs && tmux new-session -d -s $SESSION && tmux set-option -t $SESSION remain-on-exit on && tmux pipe-pane -t $SESSION 'cat >> $LOGFILE' && tmux send-keys -t $SESSION 'cd $REMOTE_DIR && $COMMAND' Enter"
+        ssh -o ConnectTimeout=10 "$REMOTE_ALIAS" "mkdir -p $REMOTE_DIR/logs && tmux new-session -d -s $SESSION && tmux set-option -t $SESSION remain-on-exit on && tmux pipe-pane -t $SESSION 'cat >> $LOGFILE' && tmux send-keys -t $SESSION $(printf '%q' "cd $REMOTE_DIR && $COMMAND") Enter"
         echo "Running in tmux session '$SESSION' on $REMOTE_ALIAS"
         echo "Log:    ssh $REMOTE_ALIAS \"tail -100 $LOGFILE\""
         echo "Attach: ssh -t $REMOTE_ALIAS \"tmux attach -t $SESSION\""
     else
         # ad-hoc: stream output directly
-        ssh -o ConnectTimeout=10 "$REMOTE_ALIAS" "zsh -i -c 'cd $REMOTE_DIR && $*'"
+        ssh -o ConnectTimeout=10 "$REMOTE_ALIAS" "zsh -i -c $(printf '%q' "cd $REMOTE_DIR && $*")"
     fi
 fi
