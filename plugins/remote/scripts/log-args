@@ -1,4 +1,0 @@
-#!/usr/bin/env bash
-# render the MCP call as Python-style Remote(arg=value, ...) on stdout, so
-# the args are visible in the transcript without ctrl+o expansion
-jq -r '"Remote(\n" + (.tool_input | to_entries | map("    \(.key)=\(.value | tojson)") | join(",\n")) + "\n)"' || true
