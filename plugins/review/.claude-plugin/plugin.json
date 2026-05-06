@@ -1,6 +1,6 @@
 {
   "name": "review",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Preview diffs in neovim before accepting",
   "userConfig": {
     "tmux_prefix": {
