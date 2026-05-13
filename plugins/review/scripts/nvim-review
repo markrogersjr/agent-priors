@@ -27,16 +27,22 @@ do
   local closed = false
   local ticks = 0
   local function show()
-    local found = false
-    for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
-      local b = vim.api.nvim_win_get_buf(win)
-      if vim.bo[b].buftype == '' then
-        vim.api.nvim_set_current_win(win)
-        found = true
-        break
+    local target_win
+    local file_buf = vim.fn.bufnr(file_path)
+    if file_buf ~= -1 then
+      target_win = vim.fn.win_findbuf(file_buf)[1]
+    end
+    if not target_win then
+      for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
+        if vim.bo[vim.api.nvim_win_get_buf(win)].buftype == '' then
+          target_win = win
+          break
+        end
       end
     end
-    if not found then
+    if target_win then
+      vim.api.nvim_set_current_win(target_win)
+    else
       vim.cmd('botright vnew')
       created_window = true
     end
@@ -296,9 +302,12 @@ def highlights_to_lua(highlights: list[dict]) -> str:
 def show_diff(input_data: dict, claude_pane: str, socket: str):
     file_path = input_data['tool_input']['file_path']
     session_dir = f'{STATE_DIR}/{input_data.get("session_id", "default")}'
-    # clean up stale work dirs from prior rejections
+    # rotate prior session dir to .last so failing show.lua survives one more invocation
     if os.path.isdir(session_dir):
-        shutil.rmtree(session_dir)
+        bak = session_dir + '.last'
+        if os.path.isdir(bak):
+            shutil.rmtree(bak)
+        os.rename(session_dir, bak)
     directory = work_dir(input_data)
     os.makedirs(directory, exist_ok=True)
     match input_data['tool_name']:
