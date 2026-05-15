@@ -1,6 +1,6 @@
 {
   "name": "remote",
-  "version": "0.3.6",
+  "version": "0.3.7",
   "description": "Commit, push, sync, and run commands on a remote server",
   "userConfig": {
     "alias": {

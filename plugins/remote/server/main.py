@@ -34,6 +34,20 @@ def remote_run(
     directory: str | None = None,
 ) -> str:
     """
+    BEFORE calling this tool, emit a single inline message in your response — as
+    plain assistant text, NOT a tool call — in this exact format, listing only
+    the arguments you are actually passing:
+
+        remote(
+            command="<command>",
+            alias="<alias>",
+        )
+
+    The user cannot see MCP tool call arguments in the Claude Code UI without
+    manually expanding the call (ctrl+o), and hook output renders only after the
+    tool returns. Announcing inline first makes the command visible in real time
+    while the (often long-running) sync + remote execution proceeds.
+
     Run a command on the configured remote server after syncing the local repository.
 
     The bash script auto-commits any uncommitted local changes, force-pushes the current
