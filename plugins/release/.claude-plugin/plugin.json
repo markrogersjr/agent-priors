@@ -1,0 +1,5 @@
+{
+  "name": "release",
+  "version": "0.1.0",
+  "description": "Bump a plugin's version, commit pending changes, push, and prompt for marketplace reload"
+}
