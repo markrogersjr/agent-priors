@@ -6,6 +6,7 @@ PAYLOAD=$(cat)
 
 FILE_PATH=$(printf '%s' "$PAYLOAD" | python3 -c 'import sys,json; print(json.load(sys.stdin).get("tool_input",{}).get("file_path",""))')
 case "$FILE_PATH" in
+    */.claude/projects/*/memory/*) exit 0 ;;
     *.md) ;;
     *) exit 0 ;;
 esac
