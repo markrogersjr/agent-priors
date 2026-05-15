@@ -38,9 +38,9 @@ def remote_run(
     plain assistant text, NOT a tool call — in this exact format, listing only
     the arguments you are actually passing:
 
-        remote(
+        Remote(
             command="<command>",
-            alias="<alias>",
+            alias="<alias>"
         )
 
     The user cannot see MCP tool call arguments in the Claude Code UI without

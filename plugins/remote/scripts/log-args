@@ -1,5 +1,0 @@
-#!/usr/bin/env bash
-# Surface the MCP call args inline in the transcript via PreToolUse JSON
-# output's systemMessage field. stderr/stdout text isn't displayed without
-# ctrl+o expansion; only systemMessage renders inline.
-jq -c '{systemMessage: ("remote(\n" + (.tool_input | to_entries | map("    \(.key)=\(.value | tojson)") | join(",\n")) + "\n)")}' || true
