@@ -7,11 +7,13 @@ REMOTE_ALIAS=$(jq -er '.pluginConfigs["remote@agent-priors"].options.alias' "$SE
 REMOTE_AUTHOR=$(jq -er '.pluginConfigs["remote@agent-priors"].options.author' "$SETTINGS")
 REMOTE_DIR=$(jq -er '.pluginConfigs["remote@agent-priors"].options.directory' "$SETTINGS")
 
+MESSAGE=""
 while [[ $# -gt 0 && "$1" == --* ]]; do
     case "$1" in
         --alias=*) REMOTE_ALIAS="${1#*=}" ;;
         --author=*) REMOTE_AUTHOR="${1#*=}" ;;
         --directory=*) REMOTE_DIR="${1#*=}" ;;
+        --message=*) MESSAGE="${1#*=}" ;;
         *) echo "unknown option: $1" >&2; exit 1 ;;
     esac
     shift
@@ -21,8 +23,11 @@ BRANCH=$(git rev-parse --abbrev-ref HEAD)
 
 # sync local changes to remote
 if ! git diff --quiet HEAD 2>/dev/null || [ -n "$(git ls-files --others --exclude-standard)" ]; then
+    if [ -z "$MESSAGE" ]; then
+        echo "error: uncommitted changes require --message=<commit message>" >&2
+        exit 1
+    fi
     git add -A
-    MESSAGE=$(git diff --cached | timeout 30 claude -p --bare --model haiku --no-session-persistence --dangerously-skip-permissions "Write a concise git commit message (1 subject line + blank line + bullet points) summarizing this diff. No markdown fences." 2>/dev/null) || MESSAGE="wip: $(date +%Y%m%d-%H%M%S)"
     git commit --author="$REMOTE_AUTHOR" -m "$MESSAGE" --no-verify --quiet
 fi
 git push --force-with-lease origin "$BRANCH" --quiet 2>/dev/null || git push --set-upstream origin "$BRANCH" --quiet

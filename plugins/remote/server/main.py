@@ -27,6 +27,7 @@ server = FastMCP('remote')
 @server.tool()
 def remote_run(
     command: str,
+    message: str,
     detached: bool | None = False,
     cwd: str | None = None,
     alias: str | None = None,
@@ -59,6 +60,11 @@ def remote_run(
     ----------
     command: str
         Shell command to execute on the remote. Pass an empty string to sync only.
+    message: str
+        Commit message for uncommitted local changes. Always required. Discarded
+        when the working tree is clean (no commit happens). Use a conventional
+        form: subject line summarizing the change, blank line, optional bullets
+        for details.
     detached: bool | None = False
         If `True`, runs in a detached `tmux` session on the remote and returns
         immediately. Output is logged to `<remote_dir>/logs/remote-<pid>.log`. Use for
@@ -81,6 +87,8 @@ def remote_run(
         arguments.append(f'--author={author}')
     if directory:
         arguments.append(f'--directory={directory}')
+    if message:
+        arguments.append(f'--message={message}')
     if detached:
         arguments.append('-t')
     if command:
