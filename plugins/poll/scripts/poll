@@ -3,6 +3,29 @@ set -euo pipefail
 
 TMUX="tmux -L poll"
 
+# claude blocks on the workspace-trust dialog in any never-trusted dir and
+# --dangerously-skip-permissions does not cover it; use one stable empty cwd
+# (no CLAUDE.md ancestry) and pre-accept trust so the session starts unattended
+ensure_trusted_cwd() {
+    local cwd=$HOME/.local/share/poll/workspace
+    mkdir -p "$cwd"
+    cwd=$(cd "$cwd" && pwd)
+    CLAUDE_CWD=$cwd python3 - <<'PY'
+import json, os, tempfile
+config_path = os.path.expanduser('~/.claude.json')
+cwd = os.environ['CLAUDE_CWD']
+config = json.load(open(config_path))
+projects = config.setdefault('projects', {})
+if projects.get(cwd, {}).get('hasTrustDialogAccepted') is not True:
+    projects[cwd] = {**projects.get(cwd, {}), 'hasTrustDialogAccepted': True}
+    handle, staged = tempfile.mkstemp(dir=os.path.dirname(config_path))
+    with os.fdopen(handle, 'w') as f:
+        json.dump(config, f, indent=2)
+    os.replace(staged, config_path)
+PY
+    echo "$cwd"
+}
+
 usage() {
     cat <<'EOF'
 Usage:
@@ -25,7 +48,7 @@ cmd_start() {
     name=$(basename "$abs_dir")
     [[ $name =~ ^[A-Za-z0-9_-]+$ ]] \
         || { echo "directory basename '$name' must match [A-Za-z0-9_-]+" >&2; exit 1; }
-    cwd=$(mktemp -d)
+    cwd=$(ensure_trusted_cwd)
     $TMUX kill-session -t "$name" 2>/dev/null || true
     $TMUX new-session -d -s "$name" -c "$cwd" \
         -e POLL_DIR="$abs_dir" \
