@@ -1,5 +1,5 @@
 {
   "name": "poll",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Long-lived Claude Code pollers for event-driven automation"
 }
