@@ -41,6 +41,11 @@
       "name": "persist",
       "source": "./plugins/persist",
       "description": "Persist conversation context across compaction events"
+    },
+    {
+      "name": "poll",
+      "source": "./plugins/poll",
+      "description": "Long-lived Claude Code pollers for event-driven automation"
     }
   ]
 }

@@ -14,6 +14,10 @@ Renders markdown files in the browser. A PostToolUse hook fires after every Writ
 
 Preserves conversation context across compaction events. When Claude Code's context window fills up and triggers compaction, the PreCompact hook forks a detached subprocess that summarizes recent conversation history via `claude -p`. On the next prompt, the plugin injects that summary as additional context. The summarizer targets plan progress, current task state, key decisions, and open blockers.
 
+### poll
+
+Runs long-lived Claude Code sessions as event-driven pollers. `poll start <directory> <instructions>` spawns a fresh Claude session in an isolated `tmux -L poll` socket that watches `<directory>` for event files and processes each per `<instructions>` — a markdown file inlined into the session via SessionStart hook (so it survives compaction). The spawned session's cwd is an ephemeral empty directory, so no project `CLAUDE.md` auto-discovery occurs; the instructions are the only context. Lifecycle (`list`, `logs <name>`, `stop <name>`) is exposed via both the `scripts/poll` CLI and an MCP server. Stays on interactive Max quota rather than the Agent SDK credit pool used by `claude -p`.
+
 ### reinforce
 
 Injects a file into every prompt. The UserPromptSubmit hook reads a user-configured file path and returns its contents as hook output, so the instructions appear in every turn regardless of compaction. Useful for project-specific rules that must not be lost.

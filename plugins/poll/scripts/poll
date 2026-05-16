@@ -1,0 +1,61 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+TMUX="tmux -L poll"
+
+usage() {
+    cat <<'EOF'
+Usage:
+  poll start <directory> <instructions>   Start a poller watching <directory>
+                                          for event files. Each new file is
+                                          processed per <instructions>.md.
+  poll list                                List running pollers
+  poll logs <name>                         Capture recent output
+  poll stop <name>                         Stop a poller
+EOF
+}
+
+cmd_start() {
+    local directory=$1 instructions=$2
+    [ -d "$directory" ] || { echo "directory '$directory' does not exist" >&2; exit 1; }
+    [ -f "$instructions" ] || { echo "instructions file '$instructions' does not exist" >&2; exit 1; }
+    local abs_dir abs_instructions name cwd
+    abs_dir=$(cd "$directory" && pwd)
+    abs_instructions=$(cd "$(dirname "$instructions")" && pwd)/$(basename "$instructions")
+    name=$(basename "$abs_dir")
+    [[ $name =~ ^[A-Za-z0-9_-]+$ ]] \
+        || { echo "directory basename '$name' must match [A-Za-z0-9_-]+" >&2; exit 1; }
+    cwd=$(mktemp -d)
+    $TMUX kill-session -t "$name" 2>/dev/null || true
+    $TMUX new-session -d -s "$name" -c "$cwd" \
+        -e POLL_DIR="$abs_dir" \
+        -e POLL_INSTRUCTIONS="$abs_instructions" \
+        "env -u CLAUDE_PLUGIN_ROOT -u ANTHROPIC_API_KEY claude --dangerously-skip-permissions begin"
+    $TMUX set-option -t "$name" @poll_dir "$abs_dir"
+    $TMUX set-option -t "$name" @poll_instructions "$abs_instructions"
+    echo "Started '$name'"
+    echo "  directory:    $abs_dir"
+    echo "  instructions: $abs_instructions"
+    echo "  attach:       tmux -L poll attach -t $name"
+}
+
+cmd_list() {
+    $TMUX list-sessions -F '#{session_name}'$'\t''#{@poll_dir}'$'\t''#{@poll_instructions}' 2>/dev/null \
+        || echo '(no pollers running)'
+}
+
+cmd_logs() {
+    $TMUX capture-pane -t "$1" -p
+}
+
+cmd_stop() {
+    $TMUX kill-session -t "$1"
+}
+
+case "${1:-}" in
+    start) shift; cmd_start "$@" ;;
+    list)  cmd_list ;;
+    logs)  shift; cmd_logs "$@" ;;
+    stop)  shift; cmd_stop "$@" ;;
+    *)     usage; exit 1 ;;
+esac

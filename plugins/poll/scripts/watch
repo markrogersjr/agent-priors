@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+dir=$1
+prev=""
+while sleep 1; do
+    curr=$(find "$dir" -maxdepth 1 -type f ! -name '.*' 2>/dev/null | sort)
+    comm -13 <(printf '%s\n' "$prev") <(printf '%s\n' "$curr") \
+        | awk 'NF { print; fflush() }'
+    prev=$curr
+done
